@@ -8,6 +8,9 @@ import {
 } from './translations';
 import { Language, Translations, I18nContextType, I18nProviderProps } from './types';
 
+const DEFAULT_LANGUAGE: Language = 'zh';
+const boardLanguageMap = new WeakMap<object, Language>();
+
 // Translation data
 const translations: Record<Language, Translations> = {
   zh: zhTranslations,
@@ -20,16 +23,28 @@ const translations: Record<Language, Translations> = {
 // Create the context
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
-export const I18nProvider: React.FC<I18nProviderProps> = ({ children, defaultLanguage = 'zh' }) => {
+export const setBoardLanguage = (board: object, language: Language) => {
+  boardLanguageMap.set(board, language);
+};
+
+export const I18nProvider: React.FC<I18nProviderProps> = ({
+  children,
+  defaultLanguage = DEFAULT_LANGUAGE,
+  initialLanguage,
+  onLanguageChange,
+}) => {
   const [language, setLanguageState] = useState<Language>(() => {
-    const storedLanguage = localStorage.getItem('language') as Language;
-    return storedLanguage || defaultLanguage;
+    const initial = initialLanguage ?? defaultLanguage;
+    return initial;
   });
 
-  const setLanguage = useCallback((newLanguage: Language) => {
-    localStorage.setItem('language', newLanguage);
-    setLanguageState(newLanguage);
-  }, []);
+  const setLanguage = useCallback(
+    (newLanguage: Language) => {
+      setLanguageState(newLanguage);
+      onLanguageChange?.(newLanguage);
+    },
+    [onLanguageChange]
+  );
 
   const t = useCallback(
     (key: keyof Translations): string => {
@@ -60,13 +75,18 @@ export const useI18n = (): I18nContextType => {
   return context;
 };
 
-export const i18nInsidePlaitHook = () => {
+export const i18nInsidePlaitHook = (board?: object | null) => {
+  const resolveLanguage = () => {
+    return (board ? boardLanguageMap.get(board) : undefined) ?? DEFAULT_LANGUAGE;
+  };
   const i18n = {
     t: (key: keyof Translations): string => {
-      const currentLang = (localStorage.getItem('language') as Language) || 'zh';
-      return translations[currentLang][key] || key;
+      const resolvedLanguage = resolveLanguage();
+      return translations[resolvedLanguage][key] || key;
     },
-    language: (localStorage.getItem('language') as Language) || 'zh',
+    get language(): Language {
+      return resolveLanguage();
+    },
   };
 
   return i18n;
